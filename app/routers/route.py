@@ -26,7 +26,7 @@ async def route_request(
     result = await db.execute(select(AIModel).where(AIModel.user_id == user.id))
     models = result.scalars().all()
 
-    chosen = select_model(models, body.preferred_labels)
+    chosen, benchmark_score = select_model(models, body.preferred_labels)
     if not chosen:
         raise HTTPException(status_code=404, detail="没有可用的模型配置")
 
@@ -61,6 +61,7 @@ async def route_request(
         duration_ms=duration_ms,
         total_tokens=total_tokens,
         cost=cost,
+        benchmark_score=benchmark_score,
     )
     db.add(log)
     await db.commit()

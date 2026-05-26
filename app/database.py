@@ -17,5 +17,10 @@ async def get_db() -> AsyncSession:
 
 
 async def init_db():
+    import app.models.user  # noqa: F401
+    import app.models.ai_model  # noqa: F401
+    import app.models.request_log  # noqa: F401
+    import app.models.benchmark  # noqa: F401
+
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

@@ -15,6 +15,7 @@ class RequestLog(Base):
     duration_ms: Mapped[float] = mapped_column(Float, nullable=False)
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=True)
     cost: Mapped[float] = mapped_column(Float, nullable=False)
+    benchmark_score: Mapped[float] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=lambda: datetime.now(timezone.utc)
     )

@@ -1,0 +1,22 @@
+{
+  "static": {
+    "avg_quality": 0.7829150965056422,
+    "total_cost": 0.060284000000000004,
+    "avg_latency_ms": 491.5183731167466
+  },
+  "leaderboard": {
+    "avg_quality": 0.8138560936089392,
+    "total_cost": 0.144493,
+    "avg_latency_ms": 510.1994467033752
+  },
+  "adaptive": {
+    "avg_quality": 0.7728553071854346,
+    "total_cost": 0.126546,
+    "avg_latency_ms": 500.0504198499969
+  },
+  "thompson": {
+    "avg_quality": 0.7781938811422949,
+    "total_cost": 0.066773,
+    "avg_latency_ms": 501.42863816752254
+  }
+}

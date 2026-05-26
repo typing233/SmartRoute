@@ -70,8 +70,13 @@ def select_model(
         if not benchmark:
             continue
 
-        domain_score = _get_domain_score(benchmark, preferred_labels)
-        score = domain_score if domain_score is not None else benchmark["overall_score"]
+        if preferred_labels:
+            domain_score = _get_domain_score(benchmark, preferred_labels)
+            if domain_score is None:
+                continue
+            score = domain_score
+        else:
+            score = benchmark["overall_score"]
 
         cost = model.cost_per_1k_tokens
         if cost <= 0:

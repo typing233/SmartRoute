@@ -5,14 +5,18 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.ai_model import AIModel
 from app.models.request_log import RequestLog
 from app.models.user import User
-from app.schemas.route import RouteRequest
+from app.schemas.route import (
+    RouteRequest, RoutingStrategy, AdaptiveRouteMetadata, EvalCandidateInfo,
+)
 from app.services.model_caller import call_model, CircuitOpenError
 from app.services.router import select_model
+from app.services.adaptive import adaptive_select, thompson_select
 
 router = APIRouter(tags=["路由"])
 
@@ -24,13 +28,73 @@ async def route_request(
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(select(AIModel).where(AIModel.user_id == user.id))
-    models = result.scalars().all()
+    models = list(result.scalars().all())
 
-    chosen, benchmark_score = select_model(models, body.preferred_labels)
-    if not chosen:
+    if not models:
         raise HTTPException(status_code=404, detail="没有可用的模型配置")
 
     messages = [m.model_dump() for m in body.messages]
+    strategy = body.strategy
+    metadata = None
+    benchmark_score = None
+
+    realtime_eval = body.enable_realtime_eval
+    if realtime_eval is None:
+        realtime_eval = settings.ENABLE_REALTIME_EVAL
+
+    if strategy == RoutingStrategy.ADAPTIVE and realtime_eval:
+        chosen, eval_results, eval_duration = await adaptive_select(
+            models, messages, body.preferred_labels, user.id
+        )
+        if not chosen:
+            raise HTTPException(status_code=404, detail="自适应路由未找到可用模型")
+
+        metadata = AdaptiveRouteMetadata(
+            strategy_used="adaptive",
+            selected_model=chosen.name,
+            eval_duration_ms=eval_duration * 1000,
+            candidates_evaluated=[
+                EvalCandidateInfo(
+                    model_name=r.model.name,
+                    snippet=r.snippet[:100],
+                    relevance_score=r.relevance_score,
+                    fluency_score=r.fluency_score,
+                    combined_score=r.combined_score,
+                    cost_adjusted_score=r.cost_adjusted_score,
+                )
+                for r in eval_results
+            ],
+        )
+        benchmark_score = max(r.combined_score for r in eval_results) if eval_results else None
+
+    elif strategy == RoutingStrategy.THOMPSON:
+        chosen, ts_score = thompson_select(models, body.preferred_labels, user.id)
+        if not chosen:
+            raise HTTPException(status_code=404, detail="Thompson采样未找到可用模型")
+        metadata = AdaptiveRouteMetadata(
+            strategy_used="thompson",
+            selected_model=chosen.name,
+            eval_duration_ms=0.0,
+        )
+        benchmark_score = ts_score
+
+    elif strategy == RoutingStrategy.STATIC:
+        chosen = min(models, key=lambda m: m.cost_per_1k_tokens)
+        metadata = AdaptiveRouteMetadata(
+            strategy_used="static",
+            selected_model=chosen.name,
+            eval_duration_ms=0.0,
+        )
+
+    else:
+        chosen, benchmark_score = select_model(models, body.preferred_labels)
+        if not chosen:
+            raise HTTPException(status_code=404, detail="没有可用的模型配置")
+        metadata = AdaptiveRouteMetadata(
+            strategy_used="leaderboard",
+            selected_model=chosen.name,
+            eval_duration_ms=0.0,
+        )
 
     start = time.perf_counter()
     try:
@@ -66,4 +130,11 @@ async def route_request(
     db.add(log)
     await db.commit()
 
-    return JSONResponse(content=response_data)
+    response_content = response_data
+    if metadata:
+        response_content = {
+            **response_data,
+            "_routing_metadata": metadata.model_dump(),
+        }
+
+    return JSONResponse(content=response_content)

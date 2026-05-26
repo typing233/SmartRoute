@@ -18,6 +18,16 @@ class Settings(BaseSettings):
     MODEL_CALL_RETRY_WAIT_MIN: float = 1.0
     MODEL_CALL_RETRY_WAIT_MAX: float = 10.0
 
+    # Adaptive routing settings
+    ENABLE_REALTIME_EVAL: bool = True
+    EVAL_SNIPPET_MAX_TOKENS: int = 30
+    EVAL_TIMEOUT: float = 2.0
+    EVAL_CANDIDATE_COUNT: int = 3
+    EVAL_MODEL_URL: str = ""
+    EVAL_MODEL_API_KEY: str = ""
+    EVAL_MODEL_NAME: str = "gpt-4o-mini"
+    EVAL_HISTORY_WEIGHT: float = 0.3
+
     class Config:
         env_file = ".env"
 
